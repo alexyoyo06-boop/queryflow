@@ -1,9 +1,10 @@
 import Groq from "groq-sdk";
 import { NextRequest } from "next/server";
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
+  const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
   const { sql } = await req.json();
 
   if (!sql || typeof sql !== "string") {
