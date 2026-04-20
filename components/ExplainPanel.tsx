@@ -1,67 +1,46 @@
 "use client";
 
-import { motion, AnimatePresence } from "framer-motion";
-
 interface Props {
   text: string;
   loading: boolean;
 }
 
 export default function ExplainPanel({ text, loading }: Props) {
+  if (!text && !loading) return null;
+
   return (
-    <div
-      style={{
-        background: "#111827",
-        borderTop: "1px solid #1e2d45",
-        padding: "12px 16px",
-        minHeight: 80,
-        maxHeight: 160,
-        overflowY: "auto",
-        position: "relative",
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-        <span style={{ color: "#3b82f6", fontSize: 11, fontWeight: 700, letterSpacing: 1 }}>
-          AI EXPLANATION
-        </span>
+    <div style={{
+      borderTop: "2px solid #0a0a0a",
+      background: "#f2f0eb",
+      padding: "10px 16px 12px",
+      maxHeight: 140,
+      overflowY: "auto",
+      flexShrink: 0,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+        <span style={{ fontFamily: "'Space Mono', monospace", color: "#ff2b2b", fontSize: 9, fontWeight: 700, letterSpacing: "0.1em" }}>AI</span>
+        <span style={{ color: "#ccc", fontSize: 10 }}>──────</span>
         {loading && (
-          <span
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: "50%",
-              background: "#3b82f6",
-              display: "inline-block",
-              animation: "pulse 1s infinite",
-            }}
-          />
+          <span style={{
+            display: "inline-block",
+            width: 5,
+            height: 5,
+            background: "#ff2b2b",
+            animation: "blink 1s infinite",
+          }} />
         )}
       </div>
-
-      <AnimatePresence mode="wait">
-        {text ? (
-          <motion.p
-            key="text"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            style={{ color: "#94a3b8", fontSize: 12, lineHeight: 1.7, margin: 0 }}
-          >
-            {text}
-            {loading && <span style={{ color: "#3b82f6" }}>▌</span>}
-          </motion.p>
-        ) : !loading ? (
-          <p style={{ color: "#334155", fontSize: 12, margin: 0 }}>
-            Click <span style={{ color: "#3b82f6" }}>Visualize</span> to generate an AI explanation of your query.
-          </p>
-        ) : null}
-      </AnimatePresence>
-
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.3; }
-        }
-      `}</style>
+      <p style={{
+        color: "#555",
+        fontSize: 11,
+        lineHeight: 1.8,
+        letterSpacing: "0.02em",
+        fontFamily: "'Space Grotesk', sans-serif",
+      }}>
+        {text}
+        {loading && <span style={{ color: "#ff2b2b", marginLeft: 2 }}>▌</span>}
+      </p>
+      <style>{`@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }`}</style>
     </div>
   );
 }

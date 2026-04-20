@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { parseSQL, ParseResult } from "@/lib/sql-parser";
 import ExplainPanel from "@/components/ExplainPanel";
@@ -9,22 +9,10 @@ const SqlEditor = dynamic(() => import("@/components/SqlEditor"), { ssr: false }
 const FlowDiagram = dynamic(() => import("@/components/FlowDiagram"), { ssr: false });
 
 const EXAMPLES = [
-  {
-    label: "Basic SELECT",
-    sql: `SELECT id, name, email\nFROM users\nWHERE age > 18\nORDER BY name ASC\nLIMIT 10`,
-  },
-  {
-    label: "JOIN",
-    sql: `SELECT u.name, o.total, o.created_at\nFROM users u\nJOIN orders o ON u.id = o.user_id\nWHERE o.total > 100\nORDER BY o.created_at DESC`,
-  },
-  {
-    label: "GROUP BY + HAVING",
-    sql: `SELECT city, COUNT(*) AS total_users, AVG(age) AS avg_age\nFROM users\nWHERE active = 1\nGROUP BY city\nHAVING COUNT(*) > 5\nORDER BY total_users DESC`,
-  },
-  {
-    label: "Multi JOIN",
-    sql: `SELECT u.name, p.title, c.name AS category\nFROM users u\nJOIN posts p ON u.id = p.user_id\nJOIN categories c ON p.category_id = c.id\nWHERE p.published = 1\nORDER BY p.created_at DESC\nLIMIT 20`,
-  },
+  { label: "SELECT", sql: `SELECT id, name, email\nFROM users\nWHERE age > 18\nORDER BY name ASC\nLIMIT 10` },
+  { label: "JOIN", sql: `SELECT u.name, o.total, o.created_at\nFROM users u\nJOIN orders o ON u.id = o.user_id\nWHERE o.total > 100\nORDER BY o.created_at DESC` },
+  { label: "GROUP BY", sql: `SELECT city, COUNT(*) AS total_users, AVG(age) AS avg_age\nFROM users\nWHERE active = 1\nGROUP BY city\nHAVING COUNT(*) > 5\nORDER BY total_users DESC` },
+  { label: "MULTI JOIN", sql: `SELECT u.name, p.title, c.name AS category\nFROM users u\nJOIN posts p ON u.id = p.user_id\nJOIN categories c ON p.category_id = c.id\nWHERE p.published = 1\nORDER BY p.created_at DESC\nLIMIT 20` },
 ];
 
 export default function Home() {
@@ -33,28 +21,29 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [explanation, setExplanation] = useState("");
   const [explaining, setExplaining] = useState(false);
+  const [activeExample, setActiveExample] = useState(0);
   const [hasVisualized, setHasVisualized] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") visualize();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  });
 
   const visualize = useCallback(async () => {
     setError(null);
     const parsed = parseSQL(sql);
-    if (parsed.error) {
-      setError(parsed.error);
-      setResult(null);
-      return;
-    }
+    if (parsed.error) { setError(parsed.error); setResult(null); return; }
     setResult(parsed);
     setHasVisualized(true);
-
-    // Fetch explanation
     if (abortRef.current) abortRef.current.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
-
     setExplanation("");
     setExplaining(true);
-
     try {
       const res = await fetch("/api/explain", {
         method: "POST",
@@ -62,25 +51,20 @@ export default function Home() {
         body: JSON.stringify({ sql }),
         signal: ctrl.signal,
       });
-
       const reader = res.body?.getReader();
       const decoder = new TextDecoder();
       if (!reader) return;
-
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         setExplanation((prev) => prev + decoder.decode(value));
       }
-    } catch {
-      // aborted or no API key
-    } finally {
-      setExplaining(false);
-    }
+    } catch { /* aborted */ } finally { setExplaining(false); }
   }, [sql]);
 
-  const loadExample = (exSql: string) => {
-    setSql(exSql);
+  const loadExample = (idx: number) => {
+    setActiveExample(idx);
+    setSql(EXAMPLES[idx].sql);
     setResult(null);
     setExplanation("");
     setError(null);
@@ -88,148 +72,129 @@ export default function Home() {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "#0a0e1a" }}>
-      {/* Header */}
-      <header
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "0 20px",
-          height: 52,
-          background: "#111827",
-          borderBottom: "1px solid #1e2d45",
-          flexShrink: 0,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: 20 }}>⬡</span>
-          <span style={{ color: "#e2e8f0", fontWeight: 700, fontSize: 16, letterSpacing: -0.5 }}>
-            Query<span style={{ color: "#3b82f6" }}>Flow</span>
-          </span>
-          <span
-            style={{
-              color: "#475569",
-              fontSize: 11,
-              marginLeft: 4,
-              background: "#1e2d45",
-              padding: "2px 8px",
-              borderRadius: 99,
-            }}
-          >
-            SQL Visualizer
-          </span>
-        </div>
+    <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "var(--bg)" }}>
 
-        <div style={{ display: "flex", gap: 8 }}>
-          {EXAMPLES.map((ex) => (
+      {/* Header */}
+      <header style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "0 16px",
+        height: 48,
+        background: "white",
+        borderBottom: "2px solid #0a0a0a",
+        flexShrink: 0,
+      }}>
+        <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 15, fontWeight: 700, letterSpacing: "-0.02em", color: "#0a0a0a" }}>
+          QUERY<span style={{ color: "#ff2b2b" }}>FLOW</span>
+        </span>
+
+        <div style={{ display: "flex", border: "2px solid #0a0a0a", overflow: "hidden" }}>
+          {EXAMPLES.map((ex, i) => (
             <button
               key={ex.label}
-              onClick={() => loadExample(ex.sql)}
+              onClick={() => loadExample(i)}
               style={{
-                background: "#1a2235",
-                border: "1px solid #1e2d45",
-                color: "#64748b",
+                background: activeExample === i ? "#0a0a0a" : "white",
+                color: activeExample === i ? "white" : "#0a0a0a",
+                border: "none",
+                borderRight: i < EXAMPLES.length - 1 ? "2px solid #0a0a0a" : "none",
                 fontSize: 11,
-                padding: "4px 10px",
-                borderRadius: 6,
+                padding: "4px 14px",
                 cursor: "pointer",
-                transition: "all 0.15s",
-                fontFamily: "inherit",
-              }}
-              onMouseEnter={(e) => {
-                (e.target as HTMLButtonElement).style.color = "#94a3b8";
-                (e.target as HTMLButtonElement).style.borderColor = "#334155";
-              }}
-              onMouseLeave={(e) => {
-                (e.target as HTMLButtonElement).style.color = "#64748b";
-                (e.target as HTMLButtonElement).style.borderColor = "#1e2d45";
+                fontFamily: "'Space Mono', monospace",
+                fontWeight: 700,
+                letterSpacing: "0.05em",
+                transition: "all 0.1s",
               }}
             >
               {ex.label}
             </button>
           ))}
         </div>
+
+        <span style={{ fontFamily: "'Space Mono', monospace", color: "#aaa", fontSize: 10, letterSpacing: "0.05em" }}>
+          CTRL+ENTER
+        </span>
       </header>
 
       {/* Main */}
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-        {/* Left panel - Editor */}
-        <div
-          style={{
-            width: 380,
-            flexShrink: 0,
+
+        {/* Left: Editor */}
+        <div style={{
+          width: 360,
+          flexShrink: 0,
+          display: "flex",
+          flexDirection: "column",
+          borderRight: "2px solid #0a0a0a",
+          background: "white",
+        }}>
+          {/* Tab bar */}
+          <div style={{
+            padding: "0 16px",
+            height: 36,
             display: "flex",
-            flexDirection: "column",
-            borderRight: "1px solid #1e2d45",
-          }}
-        >
-          {/* Editor label */}
-          <div
-            style={{
-              padding: "8px 14px",
-              background: "#0f172a",
-              borderBottom: "1px solid #1e2d45",
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              flexShrink: 0,
-            }}
-          >
-            <span style={{ color: "#334155", fontSize: 11, fontWeight: 600, letterSpacing: 0.5 }}>
-              SQL EDITOR
-            </span>
+            alignItems: "center",
+            borderBottom: "2px solid #0a0a0a",
+            gap: 6,
+          }}>
+            <span style={{ fontFamily: "'Space Mono', monospace", color: "#ff2b2b", fontSize: 10, fontWeight: 700 }}>●</span>
+            <span style={{ fontFamily: "'Space Mono', monospace", color: "#aaa", fontSize: 10, letterSpacing: "0.08em" }}>query.sql</span>
           </div>
 
-          {/* CodeMirror */}
+          {/* Editor */}
           <div style={{ flex: 1, overflow: "hidden" }}>
             <SqlEditor value={sql} onChange={setSql} />
           </div>
 
           {/* Error */}
           {error && (
-            <div
-              style={{
-                padding: "10px 14px",
-                background: "#2d1010",
-                borderTop: "1px solid #7f1d1d",
-                color: "#fca5a5",
-                fontSize: 12,
-              }}
-            >
-              {error}
+            <div style={{
+              padding: "8px 16px",
+              background: "#ff2b2b",
+              borderTop: "2px solid #0a0a0a",
+              color: "white",
+              fontFamily: "'Space Mono', monospace",
+              fontSize: 11,
+              fontWeight: 700,
+            }}>
+              ✗ {error}
             </div>
           )}
 
-          {/* Visualize button */}
-          <div
-            style={{
-              padding: "12px 14px",
-              background: "#0f172a",
-              borderTop: "1px solid #1e2d45",
-              flexShrink: 0,
-            }}
-          >
+          {/* Run button */}
+          <div style={{ padding: "12px 16px", borderTop: "2px solid #0a0a0a", background: "white" }}>
             <button
               onClick={visualize}
               style={{
                 width: "100%",
-                background: "#2563eb",
-                color: "#fff",
-                border: "none",
-                borderRadius: 8,
+                background: "#0a0a0a",
+                color: "white",
+                border: "2px solid #0a0a0a",
                 padding: "10px",
-                fontSize: 13,
-                fontWeight: 600,
+                fontSize: 12,
+                fontWeight: 700,
                 cursor: "pointer",
-                letterSpacing: 0.3,
-                fontFamily: "inherit",
-                transition: "background 0.15s",
+                letterSpacing: "0.1em",
+                fontFamily: "'Space Mono', monospace",
+                transition: "transform 0.1s, box-shadow 0.1s",
+                boxShadow: "3px 3px 0 #555",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
               }}
-              onMouseEnter={(e) => ((e.target as HTMLButtonElement).style.background = "#1d4ed8")}
-              onMouseLeave={(e) => ((e.target as HTMLButtonElement).style.background = "#2563eb")}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = "translate(-2px, -2px)";
+                e.currentTarget.style.boxShadow = "5px 5px 0 #555";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = "translate(0, 0)";
+                e.currentTarget.style.boxShadow = "3px 3px 0 #555";
+              }}
             >
-              ▶ Visualize Query
+              ▶ VISUALIZE
             </button>
           </div>
 
@@ -237,30 +202,52 @@ export default function Home() {
           <ExplainPanel text={explanation} loading={explaining} />
         </div>
 
-        {/* Right panel - Diagram */}
-        <div style={{ flex: 1, position: "relative" }}>
+        {/* Right: Diagram */}
+        <div style={{ flex: 1, position: "relative", background: "var(--bg)" }}>
+          {/* Dot grid */}
+          <svg
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }}
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <defs>
+              <pattern id="dots" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
+                <circle cx="1" cy="1" r="1" fill="#c8c5be" />
+              </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#dots)" />
+          </svg>
+
+          {/* Empty state */}
           {!hasVisualized && (
-            <div
-              style={{
-                position: "absolute",
-                inset: 0,
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 16,
-                zIndex: 1,
-                pointerEvents: "none",
-              }}
-            >
-              <span style={{ fontSize: 64, opacity: 0.07 }}>⬡</span>
-              <p style={{ color: "#1e3a5f", fontSize: 14, textAlign: "center", maxWidth: 280 }}>
-                Write or select an example query, then click{" "}
-                <span style={{ color: "#1d4ed8" }}>Visualize Query</span>
-              </p>
+            <div style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 16,
+              zIndex: 1,
+              pointerEvents: "none",
+            }}>
+              <div style={{
+                border: "2px solid #0a0a0a",
+                background: "white",
+                padding: "20px 32px",
+                boxShadow: "4px 4px 0 #0a0a0a",
+                textAlign: "center",
+              }}>
+                <p style={{ fontFamily: "'Space Mono', monospace", color: "#aaa", fontSize: 10, letterSpacing: "0.08em" }}>
+                  WRITE A QUERY AND PRESS
+                </p>
+                <p style={{ fontFamily: "'Space Mono', monospace", color: "#0a0a0a", fontSize: 14, fontWeight: 700, marginTop: 6, letterSpacing: "0.05em" }}>
+                  CTRL+ENTER
+                </p>
+              </div>
             </div>
           )}
-          <FlowDiagram result={result} />
+
+          <FlowDiagram result={hasVisualized ? result : null} />
         </div>
       </div>
     </div>

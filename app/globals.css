@@ -1,31 +1,35 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
 @import "tailwindcss";
+
+:root {
+  --bg: #f2f0eb;
+  --black: #0a0a0a;
+  --red: #ff2b2b;
+  --border: 2px solid #0a0a0a;
+}
 
 * {
   box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
 body {
-  background: #0a0e1a;
-  color: #e2e8f0;
-  font-family: 'Inter', system-ui, sans-serif;
-  margin: 0;
-  padding: 0;
+  background: var(--bg);
+  color: var(--black);
+  font-family: 'Space Grotesk', system-ui, sans-serif;
   overflow: hidden;
 }
 
-/* Scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-}
-::-webkit-scrollbar-track {
-  background: #111827;
-}
-::-webkit-scrollbar-thumb {
-  background: #1e2d45;
-  border-radius: 3px;
+.mono {
+  font-family: 'Space Mono', monospace;
 }
 
-/* React Flow */
-.react-flow__renderer {
-  border-radius: 12px;
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); border-left: 1px solid #ccc; }
+::-webkit-scrollbar-thumb { background: var(--black); }
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
 }

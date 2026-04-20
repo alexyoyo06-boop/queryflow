@@ -5,44 +5,62 @@ import ReactFlow, {
   Background,
   BackgroundVariant,
   Controls,
-  MiniMap,
   useNodesState,
   useEdgesState,
   MarkerType,
 } from "reactflow";
 import "reactflow/dist/style.css";
-import dagre from "@dagrejs/dagre";
-import { ParseResult } from "@/lib/sql-parser";
+import { ParseResult, NodeType } from "@/lib/sql-parser";
 import SqlNode from "./SqlNode";
 
 const nodeTypes = { sqlNode: SqlNode };
 
-const NODE_WIDTH = 200;
-const NODE_HEIGHT = 100;
+const NODE_W = 240;
+const NODE_H = 110;
+const COL_GAP = 140;
+const ROW_GAP = 30;
 
-function layoutNodes(
-  nodes: { id: string; data: unknown }[],
-  edges: { id: string; source: string; target: string }[]
-) {
-  const g = new dagre.graphlib.Graph();
-  g.setDefaultEdgeLabel(() => ({}));
-  g.setGraph({ rankdir: "LR", nodesep: 60, ranksep: 80 });
+// Group node types into 3 columns
+const COLUMN: Record<NodeType, 0 | 1 | 2> = {
+  table:    0,
+  subquery: 0,
+  join:     0,
+  where:    1,
+  groupby:  1,
+  having:   1,
+  orderby:  2,
+  limit:    2,
+  select:   2,
+};
 
-  nodes.forEach((n) => g.setNode(n.id, { width: NODE_WIDTH, height: NODE_HEIGHT }));
-  edges.forEach((e) => g.setEdge(e.source, e.target));
+function layoutNodes(nodes: { id: string; type: string; data: unknown }[]) {
+  // Separate into 3 columns
+  const cols: { id: string; type: string; data: unknown }[][] = [[], [], []];
 
-  dagre.layout(g);
-
-  return nodes.map((n) => {
-    const pos = g.node(n.id);
-    return {
-      ...n,
-      position: { x: pos.x - NODE_WIDTH / 2, y: pos.y - NODE_HEIGHT / 2 },
-    };
+  nodes.forEach((n) => {
+    const d = n.data as { type: NodeType };
+    const col = COLUMN[d.type] ?? 1;
+    cols[col].push(n);
   });
-}
 
-const EDGE_COLOR = "#334155";
+  const positioned: { id: string; type: string; data: unknown; position: { x: number; y: number } }[] = [];
+
+  cols.forEach((col, colIdx) => {
+    const totalHeight = col.length * NODE_H + (col.length - 1) * ROW_GAP;
+    const startY = -totalHeight / 2;
+    col.forEach((node, rowIdx) => {
+      positioned.push({
+        ...node,
+        position: {
+          x: colIdx * (NODE_W + COL_GAP),
+          y: startY + rowIdx * (NODE_H + ROW_GAP),
+        },
+      });
+    });
+  });
+
+  return positioned;
+}
 
 interface Props {
   result: ParseResult | null;
@@ -69,34 +87,20 @@ export default function FlowDiagram({ result }: Props) {
       source: e.from,
       target: e.to,
       type: "smoothstep",
-      animated: true,
-      style: { stroke: "#3b82f6", strokeWidth: 2 },
-      markerEnd: { type: MarkerType.ArrowClosed, color: "#3b82f6" },
+      animated: false,
+      style: { stroke: "#0a0a0a", strokeWidth: 2 },
+      markerEnd: { type: MarkerType.ArrowClosed, color: "#0a0a0a" },
     }));
   }, [result]);
 
   useEffect(() => {
-    if (rfNodes.length === 0) {
-      setNodes([]);
-      setEdges([]);
-      return;
-    }
-    const laid = layoutNodes(rfNodes, rfEdges);
+    if (rfNodes.length === 0) { setNodes([]); setEdges([]); return; }
+    const laid = layoutNodes(rfNodes);
     setNodes(laid as Parameters<typeof setNodes>[0]);
     setEdges(rfEdges);
   }, [rfNodes, rfEdges, setNodes, setEdges]);
 
-  if (!result || result.nodes.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full gap-4 select-none">
-        <div style={{ fontSize: 56, opacity: 0.15 }}>⬡</div>
-        <p style={{ color: "#334155", fontSize: 14, textAlign: "center", maxWidth: 260 }}>
-          Write a SQL query on the left and hit{" "}
-          <span style={{ color: "#3b82f6" }}>Visualize</span> to see the flow diagram
-        </p>
-      </div>
-    );
-  }
+  if (!result || result.nodes.length === 0) return null;
 
   return (
     <ReactFlow
@@ -106,19 +110,21 @@ export default function FlowDiagram({ result }: Props) {
       onEdgesChange={onEdgesChange}
       nodeTypes={nodeTypes}
       fitView
-      fitViewOptions={{ padding: 0.3 }}
-      minZoom={0.3}
+      fitViewOptions={{ padding: 0.2, minZoom: 0.5, maxZoom: 1.2 }}
+      minZoom={0.2}
       maxZoom={2}
       proOptions={{ hideAttribution: true }}
+      style={{ background: "transparent" }}
     >
-      <Background variant={BackgroundVariant.Dots} color="#1e2d45" gap={24} size={1} />
+      <Background variant={BackgroundVariant.Dots} color="transparent" />
       <Controls
-        style={{ background: "#111827", border: "1px solid #1e2d45", borderRadius: 8 }}
-      />
-      <MiniMap
-        style={{ background: "#111827", border: "1px solid #1e2d45", borderRadius: 8 }}
-        nodeColor="#1e3a5f"
-        maskColor="#0a0e1a88"
+        showInteractive={false}
+        style={{
+          background: "white",
+          border: "2px solid #0a0a0a",
+          borderRadius: 0,
+          boxShadow: "3px 3px 0 #0a0a0a",
+        }}
       />
     </ReactFlow>
   );
